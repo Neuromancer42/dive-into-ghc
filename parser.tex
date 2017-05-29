@@ -63,6 +63,8 @@
  	\subsection{抽象语法树}
  	\paragraph{}
  	经过 GHC 的多种扩展，GHC Haskell 的语法已经变得相当复杂，所以在这里不展开解释，完整的 Hasekll 语法定义详见 ghc/compiler/hsSyn 文件夹下内容，而语法分析得到的语法树由 ghc/compiler/parser/RdrHsSyn.hs 文件所定义，Rdr 是 Reader 缩写。与 HsSyn 中的定义所不同之处在于，RdrName 大部分名字没有与定义位置所绑定，需要在接下来 renamer 这一步才能将其与其实际所指向的代码产生关联。
+ 	\paragraph{}
+ 	下面就是 RdrHsSyn 所产生的语法分析树中所使用的对标识符的定义，OccName 仅根据上下文对该名字是 type 还是 term 做了区分。
  	\begin{minted}{haskell}
 data RdrName 
   = Unqual OccName
@@ -86,6 +88,8 @@ data RdrName
     --  and "(,)", but wants a RdrName from it
     --  (b) by Template Haskell, when TH has generated a unique name
  	\end{minted}
+ 	\paragraph{}
+ 	另外关于抽象语法树还有一点细节在于上文提到的部分定位信息与语法树分离。对于比如 let <let-bindinds> in <expression> 这样的结构，token “in” 只在做语法分析时产生作用，在构建完成的抽象语法树中应当不占据位置；再比如注释，在语法树中也不起作用。但在错误定位以及编辑器语义高亮等场景下，需要将解析出的语法树还原成与原来一摸一样的代码，就需要这些代码的位置信息。如果直接将这些结构插入到语法树中，会导致极其复杂的语法树构造，而且对之后做语义分析带来许多麻烦。GHC Parser 的处理办法是，将这些不起语义作用的 token 记录在最接近的语义单元的定位信息中，再将这些 token 的定位信息存放在一个全局的从 token 种类到定位信息（和内容）的 map 中。这样既不会增加语法分析的复杂度，也能保持一个简洁的抽象语法树。
 	\subsection{左递归语法}
 	\paragraph{}
 	由于一方面 LALR(1) 方式生成的分析器在处理左递归时更节省空间，另一方面大部分中缀符号在这一阶段无法确认结合方向（Haskell 允许自定义中缀运算符，并可定义结合方向和优先级），所以在做语法分析时，认为所有符号是左结合的，直到 renamer 时确认符号结合方向和优先级时才重构语法树。
