@@ -148,5 +148,57 @@ url="http://repository.brynmawr.edu/compsci_pubs/15/"
 	chapter = {},
 	isbn = {},
 }
-
+@misc{ghcprim,
+author="The GHC team",
+url="https://hackage.haskell.org/package/ghc-prim",
+title="The ghc-prim package"
+}
+@article{implementing-lazy-functional-languages-on-stock-hardware-the-spineless-tagless-g-machine,
+	author = {Peyton Jones, Simon},
+	title = {Implementing Lazy Functional Languages on Stock Hardware: The Spineless Tagless G-machine},
+	booktitle = {},
+	year = {1992},
+	month = {July},
+	abstract = {
+	
+	The Spineless Tagless G-machine is an abstract machine designed to support non- strict higher-order functional languages. This presentation of the machine falls into three parts. Firstly, we give a general discussion of the design issues involved in implementing non-strict functional languages.
+	Next, we present the STG language, an austere but recognisably-functional language, which as well as a denotational meaning has a well-defined operational semantics. The STG language is the \abstract machine code" for the Spineless Tagless G-machine.
+	Lastly, we discuss the mapping of the STG language onto stock hardware. The success of an abstract machine model depends largely on how efficient this mapping can be made, though this topic is often relegated to a short section. Instead, we give a detailed discussion of the design issues and the choices we have made. Our principal target is the C language, treating the C compiler as a portable assembler.
+	
+	
+	},
+	publisher = {Cambridge University Press},
+	url = {https://www.microsoft.com/en-us/research/publication/implementing-lazy-functional-languages-on-stock-hardware-the-spineless-tagless-g-machine/},
+	address = {},
+	pages = {127–202},
+	journal = {Journal of Functional Programming},
+	volume = {2},
+	chapter = {},
+	isbn = {},
+}
+@inproceedings{make-fast-curry-pushenter-vs-evalapply,
+	author = {Peyton Jones, Simon},
+	title = {How to make a fast curry: push/enter vs eval/apply},
+	booktitle = {},
+	year = {2004},
+	month = {September},
+	abstract = {Higher-order languages that encourage currying are typically implemented using one of two basic evaluation models: push/enter or eval/apply. Implementors use their intuition and qualitative judgements to choose one model or the other.
+	
+	Our goal in this paper is to provide, for the first time, a more substantial basis for this choice, based on our qualitative and quantitative experience of implementing both models in a state-of-the-art compiler for Haskell.
+	
+	Our conclusion is simple, and contradicts our initial intuition: compiled implementations should use eval/apply.
+	
+	Conference version (2004) 
+	Slides of talk 
+	
+	&nbsp;},
+	publisher = {},
+	url = {https://www.microsoft.com/en-us/research/publication/make-fast-curry-pushenter-vs-evalapply/},
+	address = {},
+	pages = {4-15},
+	journal = {},
+	volume = {},
+	chapter = {},
+	isbn = {},
+}
 
