@@ -13,6 +13,11 @@ title="ghc/compiler/parser/",
 author="The GHC team",
 url="https://ghc.haskell.org/trac/ghc/browser/ghc/compiler/parser"
 }
+@misc{ghcrename,
+title="ghc/compiler/rename/",
+author="The GHC team",
+url="https://ghc.haskell.org/trac/ghc/browser/ghc/compiler/rename"
+}
 @MISC{Hutton96monadicparser,
 author = "Graham Hutton and Erik Meijer",
 title = "Monadic Parser Combinators",
@@ -43,3 +48,105 @@ url = "http://www.sciencedirect.com/science/article/pii/0167642396000147",
 author = "Richard A Frost and Barbara Szydlowski"
 
 }
+@misc{haskell2010,
+title="Haskell 2010 Language Report",
+author="The Haskell community",
+url="https://www.haskell.org/onlinereport/haskell2010/haskell.html"
+}
+@article{hindley1969,
+	ISSN = {00029947},
+	URL = {http://www.jstor.org/stable/1995158},
+	author = {R. Hindley},
+	journal = {Transactions of the American Mathematical Society},
+	pages = {29-60},
+	publisher = {American Mathematical Society},
+	title = {The Principal Type-Scheme of an Object in Combinatory Logic},
+	volume = {146},
+	year = {1969}
+}
+@article{MILNER1978348,
+	title = "A theory of type polymorphism in programming",
+	journal = "Journal of Computer and System Sciences",
+	volume = "17",
+	number = "3",
+	pages = "348 - 375",
+	year = "1978",
+	note = "",
+	issn = "0022-0000",
+	doi = "http://dx.doi.org/10.1016/0022-0000(78)90014-4",
+	url = "http://www.sciencedirect.com/science/article/pii/0022000078900144",
+	author = "Robin Milner",
+	
+}
+@article{WELLS1999111,
+	title = "Typability and type checking in System F are equivalent and undecidable",
+	journal = "Annals of Pure and Applied Logic",
+	volume = "98",
+	number = "1",
+	pages = "111 - 156",
+	year = "1999",
+	note = "",
+	issn = "0168-0072",
+	doi = "http://dx.doi.org/10.1016/S0168-0072(98)00047-5",
+	url = "http://www.sciencedirect.com/science/article/pii/S0168007298000475",
+	author = "J.B. Wells",
+	keywords = "System F",
+	keywords = "Semi-unification",
+	keywords = "Type inference",
+	keywords = "Typability",
+	keywords = "Type checking",
+	keywords = "Lambda calculus"
+}
+@misc{GHClangfeatures,
+title="GHC Language Features",
+author="The GHC team",
+url="http://downloads.haskell.org/~ghc/7.6.1/docs/html/users_guide/ghc-language-features.html"
+}
+@article{FCimpl,
+title="System FC, as implemented in GHC",
+author="R. A. Eisenberg",
+journal="University of Pennsylvania Department of Computer and Information Science Technical Report",
+volume="MS-CIS-15-09",
+year="2015",
+url="http://repository.brynmawr.edu/compsci_pubs/15/"
+}
+@inproceedings{Sulzmann:2007:SFT:1190315.1190324,
+	author = "Sulzmann, Martin and Chakravarty, Manuel M. T. and Jones, Simon Peyton and Donnelly, Kevin",
+	title = "System F with Type Equality Coercions",
+	booktitle = "Proceedings of the 2007 ACM SIGPLAN International Workshop on Types in Languages Design and Implementation",
+	series = "TLDI '07",
+	year = "2007",
+	isbn = "1-59593-393-X",
+	location = "Nice, Nice, France",
+	pages = "53--66",
+	numpages = "14",
+	url = "http://doi.acm.org/10.1145/1190315.1190324",
+	doi = "10.1145/1190315.1190324",
+	acmid = "1190324",
+	publisher = "ACM",
+	address = "New York, NY, USA",
+	keywords = "advanced type features, typed intermediate language",
+} 
+@article{outsideinx-modular-type-inference-with-local-assumptions,
+	author = {Vytiniotis, Dimitrios and Peyton Jones, Simon and Schrijvers, Tom and Sulzmann, Martin},
+	title = {OutsideIn(X): Modular type inference with local assumptions},
+	booktitle = {},
+	year = {2011},
+	month = {September},
+	abstract = {
+	
+	Advanced type system features, such as GADTs, type classes and type families, have proven to be invaluable language extensions for ensuring data invariants and program correctness. Unfortunately, they pose a tough problem for type inference when they are used as local type assumptions. Local type assumptions often result in the lack of principal types and cast the generalisation of local let-bindings prohibitively difficult to implement and specify. User-declared axioms only make this situation worse. In this paper, we explain the problems and-perhaps controversially-argue for abandoning local let-binding generalisation. We give empirical results that local let generalisation is only sporadically used by Haskell programmers. Moving on, we present a novel constraint-based type inference approach for local type assumptions. Our system, called OutsideIn(X), is parameterised over the particular underlying constraint domain X, in the same way as HM(X). This stratification allows us to use a common metatheory and inference algorithm. OutsideIn(X) extends the constraints of X by introducing implication constraints on top. We describe the strategy for solving these implication constraints, which, in turn, relies on a constraint solver for X. We characterise the properties of the constraint solver for X so that the resulting algorithm only accepts programs with principal types, even when the type system specification accepts programs that do not enjoy principal types. Going beyond the general framework, we give a particular constraint solver for X = type classes + GADTs + type families, a non-trivial challenge in its own right. This constraint solver has been implemented and distributed as part of GHC 7.
+	
+	
+	},
+	publisher = {Cambridge University Press},
+	url = {https://www.microsoft.com/en-us/research/publication/outsideinx-modular-type-inference-with-local-assumptions/},
+	address = {},
+	pages = {333–412},
+	journal = {Journal of Functional Programming},
+	volume = {21},
+	chapter = {},
+	isbn = {},
+}
+
+

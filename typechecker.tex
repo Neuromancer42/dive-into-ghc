@@ -4,70 +4,70 @@
 \usepackage{amsmath}
 
 \author{陈逸凡，吴昊泽}
-\title{GHC 源码剖析：重命名和类型检查}
+\title{GHC 源码剖析：类型检查}
+
 
 \begin{document}
 	\maketitle
-	\section{重命名阶段介绍}
+	\section{概述}
 	\paragraph{}
-	语法分析得到的解析树与真正表达语义的抽象语法树之间还存在差别，主要体现在解析树中的名字（或者说，标识符）都是未绑定的。在函数式语言中，将名字与其所代表的“含义”，也就是定义它的代码段，相关联的动作被称之为“绑定”。未绑定的名字带来了以下一些问题：
-	\begin{itemize}
-		\item 前文提到， Haskell 语法中用户可以自定义中缀操作符并约定优先级和结合方向。但未绑定的代码导致在语法分析时，获取不到这些运算性质的信息。所以在语法分析时，会假定所有中缀操作符都是左结合且有同一优先级的。进而，当一个表达式包含多个中缀操作符时，往往需要在获取操作符运算性质后重构其解析树才能符合其语义。
-		\item Haskell 在跨文件调用时，可以限制引入的方式来引入模块，比如 import qualified M ( f ) as Q 这样的代码，在当前源码文件范围内无法获取关于 "Q.f" 这一名字的定义，这也需要确认绑定关系才能将实际被引入的模块加入到编译过程的输入中。
-		\item 在接下来的类型检查阶段中，需要确认绑定关系才能获取每一个名字的类型，来验证类型检查的结果。而在优化和代码生成阶段，绑定信息显然也是必不可少的。
-		\item 此外，在函数定义、let绑定表达式以及 lambda 表达式（实际上都可以认为是 lambda 表达式的变形）中产生的绑定会掩盖（shadowing）当前作用域中已经定义的相同名字的绑定，这也是需要处理的问题之一
-	\end{itemize}
+	Haskell 是一门静态类型、强定型、多态的纯函数式语言，其设计精妙的类型系统也是使 Haskell 独具特色的重要原因。在 GHC 编译的过程中，类型检查也是编译器前端的重要一环。类型检查一方面可以在编译期就发现由于类型不匹配造成的错误，另一方面也可以确定一些多态函数的类型，以减小多态造成的开销。
+	\section{类型论简介}
+	\subsection{类型和类型系统}
 	\paragraph{}
-	所以说在做类型检查等后续操作时，需要一个步骤来确认绑定关系并根据定义重构部分语法树。在 GHC 中，有一个 renamer 阶段来完成这一工作。
+	类型，可以认为是满足一定性质的“值”的集合。在计算时对表达式的参数和结果的类型做约定，可以保证计算保持程序员所期望的性质。
 	\paragraph{}
-	限于时间有限，我们并未深究这一步骤的具体代码，只是简单介绍说一下这一阶段的功能和实现思路。
-	\subsection{功能}
+	为了能够形式化地描述代码与类型相关的性质和行为，许多语言都会定义自己的类型系统。完备的类型系统应当可以做到可计算的代码一定是类型上匹配的，而类型匹配的代码也可以执行计算。这样可以保证程序语义与程序员设计时的逻辑的一致性。而一个表达能力强大的类型系统，还应当支持更加丰富的类型定义，进而支持多态等类型特性，这样能在要求程序员写出满足类型要求的代码的同时，赋予程序员更高的编写代码的灵活性。
+	\subsection{类型系统与类型检查的算法}
 	\paragraph{}
-	从宏观来看，这一阶段的功能是将语法树中的 RdrName 翻译到 Name，也就是将未绑定的名字与定义它的代码位置做绑定。
+	学术界对于函数式语言的类型系统已经有非常深入的研究，对各种类型系统做类型推导也有非常成熟的算法。
 	\paragraph{}
-	重命名前后的 Name 结构见下，可以看出差别：
-\begin{minted}{haskell}
-data RdrName 
-  = Unqual OccName
-      -- Used for ordinary, unqualified occurrences 
-  | Qual ModuleName OccName
-      -- A qualified name written by the user in 
-      --  *source* code.  The module isn't necessarily 
-      -- the module where the thing is defined; 
-      -- just the one from which it is imported
-  | Orig Module OccName
-      -- An original name; the module is the *defining* module.
-      -- This is used when GHC generates code that will be fed
-      -- into the renamer (e.g. from deriving clauses), but where
-      -- we want to say "Use Prelude.map dammit".  
-  | Exact Name
-      -- We know exactly the Name. This is used 
-      --  (a) when the parser parses built-in syntax like "[]" 
-      --      and "(,)", but wants a RdrName from it
-      --  (b) by Template Haskell, when TH has generated a unique name	
-      
-data Name = Name {
-              n_sort :: NameSort,
-                  -- What sort of name it is
-              n_occ  :: !OccName,
-                  -- Its occurrence name
-              n_uniq :: Int#,
-                  -- Its identity
-              n_loc  :: !SrcLoc
-                  -- Definition site
-            }
+	函数式语言以 lambda 演算为理论基础。可以将 lambda 表达式视作描述将一个个子表达式所表示的函数组装成更复杂的函数的过程。对于带类型的 lambda 表达式，其每一个句子（term），都会伴随对于作为参数的各个子句以及该句子本身的类型约束，于是将作用在每一个子句上的类型约束集合起来，就能得到一个约束方程组。对于这个约束方程组用下面的合一算法求解，就能得到整个程序以及其中每个子句的类型信息。这就是类型重建方法的基本思路。\cite{hindley1969}\cite{MILNER1978348}。
+\begin{minted}{python}
+unify(ta,tb):
+  ta = find(ta)
+  tb = find(tb)
+  if both ta,tb are terms of the form D p1..pn with identical D,n then
+    unify(ta[i],tb[i]) for each corresponding ith parameter
+  else
+  if at least one of ta,tb is a type variable then
+    union(ta,tb)
+  else
+    error 'types do not match'
 \end{minted}
 	\paragraph{}
-	具体的但在这一过程中，renamer 还“顺带”完成了一些工作：
+	对于带一阶参数多态的 lambda 演算系统也就是 Hindley-Milner 系统\footnote{一阶多态只允许类型参数的量词出现在函数类型的顶层，也就是说，不能以多态函数为返回值}，这一算法几乎可以在线性时间内得到程序的类型信息。但是，对于更复杂的系统，如 Girard-Reynolds 系统即 System F \footnote{system F 也被称为二阶 lambda 演算，允许类型参数的量词出现在任意位置}，普通的类型重建方法在不带类型提示的时候被证明是不可判定的\cite{WELLS1999111}。这就需要对类型系统加一些限制了。
+
+	\section{GHC-Haskell 中的类型系统}
+	\paragraph{}
+	接下来需要介绍一下 GHC 中定义的类型系统。
+	\subsection{Haskell 语言的特点}
+	\paragraph{}
+	Haskell 2010 标准中\cite{haskell2010} 定义了一个略强于 HM 系统的类型系统，可以认为是“使用范围较广的语言”范围内最为强大的。
+	\paragraph{}
+	一方面，Haskell 是强静态类型的语言，运算过程中值的类型不能改变，参数的类型必须与函数定义时约定的类型相一致，不允许隐式类型转换，这对代码提出了较强的限制。
+	\paragraph{}
+	但另一方面，Haskell 又提供了很大的灵活性，除了由编译器负责实现的预定义的标准类型之外，还允许程序员在代码中不依赖预定义内容地自定义各种类型，类型构造器允许接受类型参数，所以实现了不弱于 C++ 模板类的表达能力的自定义类型。在多态范式的实现上，Haskell 既通过类型参数实现了参数多态（parametric polymorphism），也可以通过类型类\footnote{类型类的作用可与 Java 中的 Interface 类比}实现了特定多态（ad-hoc polymorphism）。此外相当重要的一点在于，函数的类型签名不是必需的，大部分类型信息可以由编译器通过类型推导自动得出。
+	\paragraph{}
+	而 GHC 还对 Haskell 语法进行了扩展，这样就导致一个更加丰富的类型系统。
+	\subsection{GHC 内部的类型系统}
+	\paragraph{}
+	GHC 在类型系统方面的扩展\cite{GHClangfeatures}主要有
 	\begin{itemize}
-		\item 首先将所有名字扩展成包含完整模块层级的形式。
-		\item 在绑定过程中，将局部作用域中掩盖了外部作用域的绑定的名字通过加后缀的方式重命名。
-		\item 在获得关于操作符运算律的声明后，将包含这些操作符的语法树重构。
-		\item 分析函数间的依赖关系，重点是分析出间接调用关系。
-		\item 检查词法错误，包括变量不在作用域内、未使用的绑定和调用、模式匹配中重复的模式等
+		\item  RankNTypes 实现了更接近 system F 的更高阶的参数多态。\footnote{需要注意的是，实际程序中往往最多需要二阶参数多态，而更高阶参数多态是不可判定的。}
+		\item Generalised Algebraic Data Type (GADTs) 允许值构造器（也是一种函数）返回更丰富的类型，从一个角度实现了 System $F_\omega$ 的一部分功能。
+		\item Type families 允许对具有一定性质的类型构造器做分类，也实现了 System $F_\omega$ 的一个非常小的子集。
+		\item Equality constraints 可以约束两个类型变量具有相同的类型。
+		\item Coercion 强制类型转换，用于将一些冗余的值构造过程消除。
 	\end{itemize}
 	\paragraph{}
-	经过这些变换后，可以认为当前的抽象语法树已经完整地体现了源代码的语义。
-	\subsection{大致实现方式}
-	renamer 的核心是维护一个保存全局环境信息的 map，map 将每个名字映射到一个包含其定义信息的栈中，越靠近栈顶的定义，其作用域越接近当前调用位置。
+	这些扩展之后，原本的带约束的 HM 系统已经不足以表达 GHC Haskell 的类型系统了。所以 GHC 使用了一个称之为 System FC 的类型系统\cite{Sulzmann:2007:SFT:1190315.1190324}\cite{FCimpl}，囊括了上面这些扩展。限于篇幅，不展开对于该类型系统的证明，只给出结论，这一类型系统是“几乎”完备的，只对开启扩展后的少数代码，有可能会导致通过类型检查的代码在运行时会发生类型错误。
+	\subsection{GHC 中类型检查的流程}
+	\paragraph{}
+	前面一篇提到，GHC 中将重命名和类型检查两个流程结合在一起执行。所有的类型检查重命名函数都在 ghc/compiler/typechecker/TcRnDriver.hs 文件中。在编译器流水线中，最外层的入口为 tcRnModule 函数，这一函数接受解析树为参数后，先处理隐式导入的 Prelude 模块\footnote{包含所有 Haskell 程序所必需的基础定义}和 import 显式导入的模块\footnote{Haskell 要求模块间导入关系不能成环}，将其导出的名字和类型都添加到环境中，并重命名所有出现的导入的名字，然后再以本文件中所有的顶层绑定为入口，对语法树进行自顶向下的扫描（其间也包括之前提到的对包含中缀运算符的表达式的解析树进行重构等操作），将生成的类型约束全部添加到环境中，之后进行一次约束求解，生成所有当前模块所有函数的类型信息。在这之后会再根据模块导出信息检查是否有未用到的绑定，以及 main 函数是否已经被导出等内容。这样对一个模块文件的检查和重命名就基本完成了。
+	\paragraph{}
+	不同于一般的 HM(X) 约束求解方法，Haskell 采用了一种称为 OutsideIn(X) 的约束求解方法\cite{outsideinx-modular-type-inference-with-local-assumptions}，基本思路就是逐模块进行类型重建，对每个模块，先对其导入的模块进行类型重建，得到其求解后的类型信息，按照引入方式添加全部或部分导出名字的类型信息到当前模块的环境中，再对当前模块生成类型约束后，再进行一次约束求解，得到当前模块的类型信息。这样模块化地进行类型重建，能够提高类型检查的效率，而且能适应 GHC 对类型系统的扩展。
+	\medskip
+	\bibliographystyle{plain}
+	\bibliography{GHCRef}
 \end{document}

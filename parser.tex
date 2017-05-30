@@ -97,7 +97,11 @@ data RdrName
 	\paragraph{}
 	Haskell 是缩进敏感的语言，通过缩进来表达代码块层次结构。在 GHC Parser 中，缩进在 Lexer 中作为一个状态来处理，并且会产生一个名为 vocurly (virtual open curly) 的 token，而当缩进结束时，产生一个 vccurly (virtural close curly) token，这样就能完成包裹子代码块的功能。
 	
-	\section{ Monadic Combinatorial Parser }
+	\section{在主程序中的代码}
+	\paragraph{}
+	Parser 模块仅仅是提供了将输入字符串处理成解析树的功能，在完整的 GHC 编译流水线中，还需要在这之前预处理输入文件（如加入定位信息）、根据编译参数设置环境变量，并在输入后补充信息等。这样才能将 Parse 的结果作为参数提供给接下来的 rename 和 typecheck 函数。具体代码在 ghc/compiler/main/HscMain.hs 中。其中包含将 Parser 模块所产生的函数再次封装成输入输出符合流水线约定的类型的过程（主要看 hscParse 函数）。
+	
+	\section{ 一点偏题：Monadic Combinatorial Parser }
 	\paragraph{}
 	解析器组合子\cite{Hutton96monadicparser}是一种常用于快速搭建解析器的技术。由于其将语法结构与解析过程完全结合在一起，所以（在有设计精妙的组合子库\cite{parsec}前提下）用代码“组装”解析器非常便捷直接。
 	\paragraph{}
