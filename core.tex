@@ -1,0 +1,242 @@
+\documentclass{article}
+%\documentclass[utf8]{ctexart}
+\usepackage{color}
+\usepackage{amsmath}
+\usepackage{listings}
+\usepackage{biblatex}
+
+\author{cyf, whz}
+\title{GHC source code diving}
+
+\addbibresource{GHCRef.bib}
+\lstset{language=haskell,frame=single}
+
+\begin{document}
+
+	\maketitle
+	\section{Desugar}
+	\paragraph{}
+	The Desugarer (\textcolor{red}{compiler/deSugar/Desugar.hs}) converts from the massive \textcolor{cyan}{HsSyn} type to GHC's intermediate language, \textcolor{cyan}{CoreSyn}. This Core-language data type is unusually tiny: just eight constructors. (\textcolor{magenta}{-ddump-ds})
+	\paragraph{}
+	Generally speaking, the desugarer produces few user errors or warnings. But it does produce some. In particular, (a) pattern-match overlap warnings are produced here; and (b) when desugaring Template Haskell code quotations, the desugarer may find that \textcolor{cyan}{THSyntax} is not expressive enough. In that case, we must produce an error (\textcolor{red}{compiler/deSugar/DsMeta.hs}).
+	\section{Core-to-Core transformations}
+	\subsection{The Core language}
+	\paragraph{}
+	The Core language is GHC's central data types. Core is a very small, explicitly-typed, variant of System F. The exact variant is called System FC, which embodies equality constraints and coercions.
+	The \textcolor{cyan}{CoreSyn} type, and the functions that operate over it, gets an entire directory \textcolor{red}{compiler/coreSyn}:
+	\begin{itemize}
+		\item \textcolor{red}{compiler/coreSyn/CoreSyn.hs}: the data type itself.
+		\item \textcolor{red}{compiler/coreSyn/PprCore.hs}: pretty-printing.
+		\item \textcolor{red}{compiler/coreSyn/CoreFVs.hs}: finding free variables.
+		\item \textcolor{red}{compiler/coreSyn/CoreSubst.hs}: substitution.
+		\item \textcolor{red}{compiler/coreSyn/CoreUtils.hs}: a variety of other useful functions over Core.
+		\item \textcolor{red}{compiler/coreSyn/CoreUnfold.hs}: dealing with "unfoldings".
+		\item \textcolor{red}{compiler/coreSyn/CoreLint.hs}: type-check the Core program. This is an incredibly-valuable consistency check, enabled by the flag \textcolor{magenta}{-dcore-lint}.
+		\item \textcolor{red}{compiler/coreSyn/CoreTidy.hs}: part of the the \textcolor{cyan}{CoreTidy} pass (the rest is in \textcolor{red}{compiler/main/TidyPgm.hs}).
+		\item \textcolor{red}{compiler/coreSyn/CorePrep.hs}: the \textcolor{cyan}{CorePrep} pass
+	\end{itemize}
+	Here is the entire \textcolor{cyan}{Core} type \textcolor{red}{compiler/coreSyn/CoreSyn.hs}:
+	\begin{lstlisting}
+type CoreExpr = Expr Var
+data Expr b	-- "b" for the type of binders, 
+  = Var	  Id
+  | Lit   Literal
+  | App   (Expr b) (Arg b)
+  | Lam   b (Expr b)
+  | Let   (Bind b) (Expr b)
+  | Case  (Expr b) b Type [Alt b]
+  | Cast  (Expr b) Coercion
+  | Tick  (Tickish Id) (Expr b)
+  | Type  Type
+
+type Arg b = Expr b
+type Alt b = (AltCon, [b], Expr b)
+
+data AltCon = DataAlt DataCon | LitAlt  Literal | DEFAULT
+
+data Bind b = NonRec b (Expr b) | Rec [(b, (Expr b))]
+	\end{lstlisting}
+	All of Haskell gets compiled through this tiny core.
+	\paragraph{}
+	Here are some notes about the individual constructors of \textcolor{cyan}{Expr}.
+	\begin{itemize}
+		\item \textcolor{cyan}{Var} represents variables. The \textcolor{cyan}{Id} it contains is essentially an \textcolor{cyan}{OccName} plus a \textcolor{cyan}{Type}; however, equality \textcolor{cyan}{(==)} on \textcolor{cyan}{Id}s is based only on their \textcolor{cyan}{OccName}'s, so two \textcolor{cyan}{Var}s with different types may be \textcolor{cyan}{(==)}-equal.
+		\item \textcolor{cyan}{Lam} is used for both term and type abstraction (small and big lambdas).
+		\item \textcolor{cyan}{Type} appears only in type-argument positions (e.g. \textcolor{cyan}{App (Var f) (Type ty)}). To emphasise this, the type synonym \textcolor{cyan}{Arg} is used as documentation when we expect that a \textcolor{cyan}{Type} constructor may show up. Anything not called \textcolor{cyan}{Arg} should not use a \textcolor{cyan}{Type} constructor. Additional GHC Core uses so called type-lambdas, they are like lambdas, but instead of taking a real argument, they take a type instead. You should not confuse them with \textcolor{cyan}{TypeFamilies}, because type-lambdas are working on a value level, while type families are functions on the type level. The simplies example for a type-lambda usage is a polymorphic one: \textcolor{cyan}{$\backslash$ x $\rightarrow$ x}. It will be represented in Core as \textcolor{cyan}{A.id = $\backslash$ (@ t\_aeK) (x\_aeG $::$ t\_aeK) $\rightarrow$ x\_aeG}, where \textcolor{cyan}{t\_aeK} is a *type argument*, so when specifying the argument of \textcolor{cyan}{x\_aeG} we can refer to \textcolor{cyan}{t\_aeK}. This is how polymorphism is represented in Core.
+		\item \textcolor{cyan}{Let} handles both recursive and non-recursive let-bindings; see the the two constructors for Bind. The \textcolor{cyan}{Let} constructor contains both binders as well as the resulting expression. The resulting expression is the \textcolor{cyan}{e} in expression \textcolor{cyan}{let x = r in e}.
+		\item \textcolor{cyan}{Cast} is used for an FC cast expression. \textcolor{cyan}{Coercion} is a synonym for \textcolor{cyan}{Type}.
+		\item \textcolor{cyan}{Tick} is used to represent all the kinds of source annotation we support: profiling SCCs, HPC ticks, and GHCi breakpoints. Was named \textcolor{cyan}{Note} some time ago.
+	\end{itemize}
+	\subsection{Core-to-Core optimization pipeline}
+	\paragraph{}
+	After the source program has been typechecked it is desugared into GHC's intermediate language Core. The Core representation of a program is then optimized by a series of correctness preserving Core-to-Core passes. At the end of desugaring we run the \textcolor{cyan}{simpleOptPgm} function that performs some simple optimizations: eliminating dead bindings and inlining. The structure of the Core-to-Core pipeline is determined in the \textcolor{cyan}{getCoreToDo} function in the \textcolor{red}{compiler/simplCore/SimplCore.hs} module. Below is an ordered list of performed optimisations.
+	\begin{itemize}
+		\item \textbf{Static Argument Transformation}: tries to remove redundant arguments to recursive calls, turning them into free variables in those calls. Only enabled with \textcolor{magenta}{-fstatic-argument-transformation}. If run this pass is preceded with a "gentle" run of the simplifier.
+		\item \textbf{Vectorisation}: run the Data Parallel Haskell vectoriser. Only enabled with \textcolor{magenta}{-fvectorise}.
+		\item \textbf{Simplifier, gentle run}
+		\item \textbf{Specialisation}: specialisation attempts to eliminate overloading.
+		\item \textbf{Full laziness, 1st pass}: floats let-bindings outside of lambdas. This pass includes annotating bindings with level information and then running the float-out pass. In this first pass of the full laziness we don't float partial applications and bindings that contain free variables - this will be done by the second pass later in the pipeline.
+		\item \textbf{Simplifier, main run}: run the main passes of the simplifier (phases 2, 1 and 0). Phase 0 is run with at least 3 iterations
+		\item \textbf{Call arity}: attempts to eta-expand local functions based on how they are used. If run, this pass is followed by a 0 phase of the simplifier.
+		\item \textbf{Demand analysis, 1st pass (a.k.a. strictness analysis)}: runs the demand analyser followed by worker-wrapper transformation and 0 phase of the simplifier. This pass tries to determine if some expressions are certain to be used and whether they will be used once or many times (cardinality analysis). We currently don't have means of saying that a binding is certain to be used many times. We can only determine that it is certain to be one-shot (ie. used only once) or probable to be one shot. Demand analysis pass only annotates Core with strictness information. This information is later used by worker/wrapper pass to perform transformations. CPR analysis is also done during demand analysis.
+		\item \textbf{Full laziness, 2nd pass}: another full-laziness pass. This time partial applications and functions with free variables are floated out.
+		\item \textbf{Common Sub-expression-elimination}: eliminates expressions that are identical.
+		\item \textbf{Float in, 2nd pass}
+		\item \textbf{Check rules, 1st pass}: this pass is not for optimisation but for troubleshooting the rules. It is only enabled with \textcolor{magenta}{-frule-check} flag that accepts a string pattern. This pass looks for rules beginning with that string pattern that could have fired but didn't and prints them to stdout.
+		\item \textbf{Liberate case}: unrolls recursive functions once in their own RHS, to avoid repeated case analysis of free variables. It's a bit like the call-pattern specialisation but for free variables rather than arguments. Followed by a phase 0 simplifier run. Only enabled with \textcolor{magenta}{-fliberate-case} flag.
+		\item \textbf{Call-pattern specialisation}: Only enabled with \textcolor{magenta}{-fspec-constr} flag.
+		\item \textbf{Check rules, 2nd pass}
+		\item \textbf{Simplifier, final}: final 0 phase of the simplifier.
+		\item \textbf{Damand analysis, 2nd pass (a.k.a. late demand analysis)}: this pass consists of demand analysis followed by worker-wrapper transformation and phase 0 of the simplifier. The reason for this pass is that some opportunities for discovering strictness were not visible earlier; and optimisations like call-pattern specialisation can create functions with unused arguments which are eliminated by late demand analysis. Only run with \textcolor{magenta}{-flate-dmd-anal}.
+		\item \textbf{Check rules, 3rd pass}
+	\end{itemize}
+	\paragraph{}
+	Simplifier is the workhorse of the Core-to-Core optimisation pipeline. It performs all the local transformations:
+	\begin{itemize}
+		\item constant folding
+		\item applying the rewrite rules
+		\item inlining
+		\item case of case
+		\item case of known constructor
+		\item eta expansion and eta reduction
+		\item combining adjacent casts
+		\item pushing a cast out of the way of an application
+	\end{itemize}
+	Each run of the simplifier is assigned with a phase number: 2, 1 or 0. Phase numbers are used for control of interaction between the rules and \textcolor{magenta}{INLINE}/\textcolor{magenta}{NOINLINE} pragmas. There are many 0 phases because the simplifier is used to propagate the effects of other passes. There is also a special initial phase, which is used at the beginning of the pipeline by the "gentle" simplifier runs.
+	\paragraph{}
+	Each single run of the simplifier consists of many iterations. Each iteration tries to apply all the optimisations. The simplifier run ends when a fixpoint is reached or when a predesignated number of iterations has been performed (the default is 4 and it can be controlled via the -fmax-simplifier-iterations flag).
+	\paragraph{}
+	The Core language is a functional language, and can be given the usual denotational semantics, but a direct operational interpretation also works for it, which facilitates the execution.
+	\paragraph{}
+	The operational model for Core requires a garbage-collected heap, which contains:
+	\begin{itemize}
+		\item \emph{Data values}
+		\item \emph{Function values}
+		\item \emph{Thunks} (or suspensions), that represent suspended (yet unevaluated) values. Thunks are the implementation mechanism for Haskell's non-strict semantics.
+	\end{itemize}
+	The two most important operational intuitions about Core are:
+	\begin{itemize}
+		\item let bindings (and only let bindings) perform heap allocation.
+		\item case expressions (and only case expressions) perform evaluation.
+	\end{itemize}
+	\subsection{Polymorphism}
+	\paragraph{}
+	As a strongly-typed language compiler, GHC infers the type of every expression and variable and takes advantage of the type information to generate better code. To implement the polymorphism mechanism, the program is decorated with type information and every program transformation must be sure to preserve it. For example, the composition function:
+	\begin{lstlisting}
+compose = /\a b c ->
+	\f::(b->c) g::(a->b) x::a ->
+	let y::b = g x in f y
+	\end{lstlisting}
+	The function takes three type parameters (a, b and c) and its value parameters f, g and x. A call of compose will be given three extra type arguments, which instantiate a, b and c just as the normal arguments instantiate f, g and x.
+	\subsection{Inlining}
+	\paragraph{}
+	Functional programs often consist of a myriad of small functions and functional programmers treat functions the way C programmers treat macros, so good inlining is crucial. Inlining removes some function-call overhead, and bring together code that was previously separated, which often exposes a cascade of new transformation opportunities, so in the simplifier inlining is implemented.
+	\begin{itemize}
+		\item \textbf{Inlining itself} replaces an occurrence of a let-bound variable by a copy of the right-hand side of its definition.
+		\item \textbf{Dead code elimination} discards let bindings that are no longer used.
+		\item \textbf{Beta reduction} replaces ($\backslash$x$\rightarrow$E)A by [x$\rightarrow$A]E. And an analogous transformation deals with type applications.
+	\end{itemize}
+	\paragraph{}
+	There are two cases of inlining: \textbf{WHNFs} and \textbf{Non-WHNFs}. If a variable is bound to a \emph{weak head normal form} (an atom, lambda abstraction or constructor application), then it can be inlined without risking the duplication of work and the trade-off is simply between code size and the benefit of inlining. Otherwise, inlining carries the risk of loss of sharing and hence the duplication of work (a transformation guaranteeing not to duplicate work is called \emph{W-safe}).
+	\paragraph{}
+	In the case of WHNFs, atoms and constructor applications are always small enough to inline. (constructor applications must have atomic arguments.) Functions can be large so the size (in syntax nodes) of the body of the function is computed and accordingly make a heuristic method (which is a bit complicated).
+	\paragraph{}
+	In the case of Non-WHNFs, attention focuses on how the variable is used. If the variable occurs just once then presumably it is safe to inline, so a simple occurrence analysis that records for each variable how many places it is used is performed. Actually this approach turns to be complicated because the simplifier tries to perform as many transformations as possible during a single pass over the program, which may change the number of occurrences of a variable. Thus the current solution is to do a great deal of book-keeping to keep occurrence information up to date. Another problem is that, for example,
+	\begin{lstlisting}
+let x = f 100
+     g = \y -> x
+     in (g a) + (g b)
+	\end{lstlisting}
+	where if simply replace x by (f 100) then the call to f makes g called, rather than sharing it among all calls to g. Thus the current solution is also conservative: never inline inside a lambda abstraction, which practically and statically sufficiency.
+	\subsection{Transforming conditionals}
+	\paragraph{}
+	Most compilers have special rules to optimise conditionals. For example,
+	\begin{lstlisting}
+if (not x) then E1 else E2
+	\end{lstlisting}
+	No decent compiler would actually negate the value of x at runtime. Actually, after desugaring and inlining the definition of not, we get
+	\begin{lstlisting}
+case (case x of {True -> False; False -> True}) of
+	True -> E1
+	False -> E2
+	\end{lstlisting}
+	Here, the outer case scrutinises the value returned by the inner case, so the outer case can be moved inside the branches of the inner one:
+	\begin{lstlisting}
+case x of
+	True -> case False of {True -> E1; False -> E2}
+	False -> case True of {True -> E1; False -> E2}
+	\end{lstlisting}
+	and we obviously we can optimise this code into:
+	\begin{lstlisting}
+case x of
+	True -> E2
+	False -> E1
+	\end{lstlisting}
+	\paragraph{}
+	Conside more general cases:
+	\begin{lstlisting}
+case (case S of {True -> R1; False -> R2}) of
+	True -> E1
+	False -> E2
+	\end{lstlisting}
+	by let-bounding we get an opportunity of case-of-case transformation:
+	\begin{lstlisting}
+let e1 = E1; e2 = E2
+in case S of
+	True -> case R1 of {True -> e1; False -> e2}
+	False -> R2 of {True -> e1; False ->e2}
+	\end{lstlisting}
+	we have given the example of not, which can be perfectly optimised, but in general cases we cannot guarantee that the newly-introduced bindings will be eliminated. It depends on R1 and R2. However, in many cases we CAN perform the elimination, and then inlining and simplification are usually performed.
+	\subsection{Unboxed data types and strictness analysis}
+	\paragraph{}
+	Because Core is non-strict, variables must be represented by a pointer to a possibly-unevaluated object. If evaluated, it will still therefore be represented by a pointer to a boxed value in the heap. In arithmetic operations boxing is possibly avoided because in many cases terms are evaluated immediately their components are evaluated and boxed, where a pair of boxing/unboxing are redundant. To implement boxing/unboxing and facilitate to expose boxing to transformation, instead of regarding the data types Int, Float and so on as primitive, the followings are defined using ordinary algebraic data declarations:
+	\begin{lstlisting}
+data Int = I# Int#
+data Float = F# Float#
+	\end{lstlisting}
+	\paragraph{}
+	Here, Int\# is the truly-primitive type of unboxed integers, and Float\# is the type of unboxed floats, and previously-primitive + operation is expressed:
+	\begin{lstlisting}
++ = \a b -> case a of
+	I# a# -> case b of
+		I# b# -> case a# +# b# of
+			r# -> I# r#
+	\end{lstlisting}
+	where +\# is the primitive addition operation on unboxed values.
+	\paragraph{}
+	GHC uses a rather simple strictness analyser, but it's a bit difficult for us to dive into so we just neglect it...
+	\subsection{Code motion}
+	\paragraph{}
+	Three distinct kinds of let-floating transformations are useful to identify:
+	\begin{itemize}
+		\item \emph{Floating inwards} moves bindings as far inwards as possible.
+		\item \emph{The full laziness transformation} floats selected bindings outside enclosing lambda abstractions.
+		\item \emph{Local transformations} "fine-tune" the location of bindings.
+	\end{itemize}
+	Floating inwards is not difficult and obviously useful.
+	Local transformations "fine-tune" the placement of bindings, which consists of just three kinds:
+	\begin{itemize}
+		\item (let v=R in B) A $\Rightarrow$ (let v=R in B A)
+		\item case (let v=R in B) of \{...\} $\Rightarrow$ let v=R in case B of \{...\}
+		\item let x = let v=R1 in R2 in B $\Rightarrow$ let v=R1 in let x=R2 in B
+	\end{itemize}
+	\paragraph{}
+	The first two transformations are always beneficial, because they do not change the number of allocations but do give other transformations more of a chance.
+	\paragraph{}
+	As for Full laziness, consider this example:
+	\begin{lstlisting}
+f = \xs -> letrec
+	g = \y -> let n = length xs
+		in ... g ... n ...
+	in ... g ...
+	\end{lstlisting}
+	Apparently "let n = length xs" can be moved to the outer of the RHS of g. Such transformation is called full laziness.
+\end{document}
+
+
+
+
+
+
+
+
