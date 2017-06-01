@@ -1,0 +1,71 @@
+\documentclass{beamer}
+\usepackage{color}
+
+% for themes, etc.
+\mode<presentation>
+{ \usetheme{boxes} }
+
+\usepackage{times}  % fonts are up to you
+\usepackage{graphicx}
+
+% these will be used later in the title page
+\title{Review of Knuth's\\ \emph{Mathematical Analysis of Algorithms}}
+\author{Haoze Wu \& Yifan Chen \\
+	Dept. of Computer Science, EECS \\
+	Peking University
+}
+\date{March 3, 2017}
+
+% hollow: \vskip 0.5in
+
+
+% note: do NOT include a \maketitle line; also note that this title
+% material goes BEFORE the \begin{document}
+
+% have this if you'd like a recurring outline
+\AtBeginSection[]  % "Beamer, do the following at the start of every section"
+{
+	\begin{frame}<beamer> 
+		\frametitle{Outline} % make a frame titled "Outline"
+		\tableofcontents[currentsection]  % show TOC and highlight current section
+	\end{frame}
+}
+
+\begin{document}
+	\begin{frame}
+		\titlepage
+	\end{frame}
+
+\section{Frontend}
+ \begin{frame}
+ 	\frametitle{The parser phase}
+ 	\begin{itemize}
+ 		\item 
+ 		Alex \& Happy: The lexer/parser generation tools in Haskell.
+ 		\item Decorated Parse Tree: All operators are left-recursion; Treat indents as virtual curly
+ 		\item Detour: Monadic Combinatorial Parsers
+ 	\end{itemize}
+ \end{frame}
+ \begin{frame}
+ 	\frametitle{The renamer and typechecker phase}
+ 	\begin{itemize}
+ 		\item Renamer: Locate all the names and refractor the syntax tree
+ 		\item Typechecker: type reconstruction and OutSideIn(X) method
+ 	\end{itemize}
+ \end{frame}
+\section{Backend}
+ \begin{frame}
+ 	\frametitle{The simplifier and optimizer phase}
+ 	\begin{itemize}
+ 		\item Core language: the most stable part of GHC
+ 		\item Optimizations
+ 	\end{itemize}
+ \end{frame}
+ \begin{frame}
+ 	\frametitle{Code generator: from lazy,functional to strict,imperative}
+ 	\begin{itemize}
+ 		\item Spineless Tagless G-machine: The key of the compilation
+ 		\item C--: a portable assembly language
+ 	\end{itemize} 
+ \end{frame}
+\end{document}

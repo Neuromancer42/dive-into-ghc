@@ -201,4 +201,51 @@ title="The ghc-prim package"
 	chapter = {},
 	isbn = {},
 }
-
+@inproceedings{c-a-portable-assembly-language,
+	author = {Oliva, Dino and Nordin, T. and Peyton Jones, Simon},
+	title = {C–: A Portable Assembly Language},
+	booktitle = {Proceedings of the 1997 Workshop on Implementing Functional Languages},
+	year = {1997},
+	month = {January},
+	abstract = {
+	
+	Of late it has become very common for resarch compilerrs to emit C as their target code, relying on a C compiler to generate machine code. In effect, C is being used as a portable compiler target language. It offers a simple and effective way of avoiding the need to re-implement effective register allocation, instruction selection, and instruction scheduling, and so on, all for a variety of target architectures. The trouble is that C was designed as a programming language not as a compiler target language, and is not very suitable for the latter purpose. The obvious thing to do is to define a language that is designed as a portable target language. This describes C–, a portable compiler target language, or assembler. C– has to strike a balance between being high-level enough to allow the back end a fair crack of the whip, while being low level enough to give the front end the control it needs. It is not clear that a path exists between these two rocks; the ghost of UNCOL lurks ominously in the shadows. Yet the increasing popularity of C as a compiler target language (despite its unsuitability) suggests strong demand, and provides an existence proof that something useful can be done.
+	
+	
+	},
+	publisher = {Springer Verlag},
+	url = {https://www.microsoft.com/en-us/research/publication/c-a-portable-assembly-language/},
+	address = {},
+	pages = {1–19},
+	journal = {},
+	volume = {1467},
+	chapter = {},
+	isbn = {},
+}
+@inproceedings{faster-laziness-using-dynamic-pointer-tagging,
+	author = {Marlow, Simon and Yakushev, Alexey Rodriguez and Peyton Jones, Simon},
+	title = {Faster laziness using dynamic pointer tagging},
+	booktitle = {ICFP '07: Proceedings of the ACM SIGPLAN international conference on Functional programming},
+	year = {2007},
+	month = {October},
+	abstract = {
+	
+	In the light of evidence that Haskell programs compiled by GHC exhibit large numbers of mispredicted branches on modern processors, we re-examine the "tagless" aspect of the STG-machine that GHC uses as its evaluation model.
+	
+	We propose two tagging strategies: a simple strategy called semi-tagging that seeks to avoid one common source of unpredictable indirect jumps, and a more complex strategy called dynamic pointer-tagging that uses the spare low bits in a pointer to encode information about the pointed-to object. Both of these strategies have been implemented and exhaustively measured in the context of a production compiler, GHC, and the paper contains detailed descriptions of the implementations. Our measurements demonstrate significant performance improvements (14% for dynamic pointer-tagging with only a 2% increase in code size), and we further demonstrate that much of the improvement can be attributed to the elimination of mispredicted branch instructions.
+	
+	As part of our investigations we also discovered that one optimisation in the STG-machine, vectored-returns, is no longer worthwhile and we explain why.
+	
+	Wiki talk page for discussion
+	
+	
+	},
+	publisher = {ACM Press},
+	url = {https://www.microsoft.com/en-us/research/publication/faster-laziness-using-dynamic-pointer-tagging/},
+	address = {},
+	pages = {},
+	journal = {},
+	volume = {},
+	chapter = {},
+	isbn = {},
+}
