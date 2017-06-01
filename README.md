@@ -3,6 +3,9 @@ Some notes on the source code of the Glorious Haskell Compiler
 
 We divide the report into the following parts
 
+* [Overview](./Overview.pdf)
+
+
 * [Parser](./parser.pdf)
 * [Renamer](./renamer.pdf)
 * [Typechecker](./typechecker.pdf)
