@@ -4,6 +4,7 @@ Some notes on the source code of the Glorious Haskell Compiler
 We divide the report into the following parts
 
 * [Overview](./Overview.pdf)
+* [Pipeline](./pipeline.pdf)
 
 
 * [Parser](./parser.pdf)
